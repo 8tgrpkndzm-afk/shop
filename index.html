@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Магазин</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #1c1c1e);
+    --hint: var(--tg-theme-hint-color, #7d7d85);
+    --line: var(--tg-theme-section-separator-color, #e3e3e8);
+    --accent: var(--tg-theme-button-color, #2a7de1);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--tg-theme-bg-color, #17181b);
+      --text: var(--tg-theme-text-color, #f2f2f4);
+      --hint: var(--tg-theme-hint-color, #9a9aa3);
+      --line: var(--tg-theme-section-separator-color, #2c2d32);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 20px 16px 120px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--hint); margin: 0 0 20px; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 14px 0;
+    border-bottom: 1px solid var(--line); }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 600; }
+  .desc { color: var(--hint); font-size: 14px; }
+  .price { margin-top: 2px; font-weight: 600; }
+  .qty { display: flex; align-items: center; gap: 10px; }
+  .qty button, .add { border: 0; border-radius: 10px; background: var(--accent);
+    color: var(--accent-text); font-size: 16px; min-width: 36px; height: 36px; padding: 0 14px; }
+  .qty button.minus { background: var(--line); color: var(--text); }
+  .qty span { min-width: 16px; text-align: center; }
+  #pay { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    height: 50px; border: 0; border-radius: 14px; background: var(--accent);
+    color: var(--accent-text); font-size: 17px; font-weight: 600; }
+  #pay[hidden] { display: none; }
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<h1>Магазин</h1>
+<p class="sub">Выберите товары и оплатите звёздами</p>
+<div id="list"></div>
+<button id="pay" hidden></button>
+
+<script>
+  // Цены и id должны совпадать с CATALOG в bot.py (бот пересчитывает сумму сам)
+  const CATALOG = [
+    { id: "guide", title: "Гайд (PDF)", desc: "Пошаговая инструкция", price: 50 },
+    { id: "templates", title: "Набор шаблонов", desc: "10 готовых шаблонов", price: 120 },
+    { id: "access", title: "Закрытый чат", desc: "Доступ на 30 дней", price: 200 }
+  ];
+  const cart = {};
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const list = document.getElementById("list");
+  const pay = document.getElementById("pay");
+
+  function total() {
+    return CATALOG.reduce((s, p) => s + p.price * (cart[p.id] || 0), 0);
+  }
+
+  function render() {
+    list.innerHTML = "";
+    CATALOG.forEach(p => {
+      const q = cart[p.id] || 0;
+      const row = document.createElement("div");
+      row.className = "item";
+      row.innerHTML =
+        '<div class="info"><div class="name">' + p.title + '</div>' +
+        '<div class="desc">' + p.desc + '</div>' +
+        '<div class="price">' + p.price + ' ⭐</div></div>' +
+        (q === 0
+          ? '<button class="add" data-add="' + p.id + '">Добавить</button>'
+          : '<div class="qty"><button class="minus" data-minus="' + p.id + '" aria-label="Убрать">−</button>' +
+            '<span>' + q + '</span>' +
+            '<button data-add="' + p.id + '" aria-label="Добавить ещё">+</button></div>');
+      list.appendChild(row);
+    });
+    const t = total();
+    const label = "Оплатить " + t + " ⭐";
+    if (tg) {
+      if (t > 0) { tg.MainButton.setText(label); tg.MainButton.show(); }
+      else tg.MainButton.hide();
+    } else {
+      pay.hidden = t === 0;
+      pay.textContent = label;
+    }
+  }
+
+  list.addEventListener("click", e => {
+    const a = e.target.dataset.add, m = e.target.dataset.minus;
+    if (a) cart[a] = (cart[a] || 0) + 1;
+    if (m) { cart[m] = (cart[m] || 1) - 1; if (cart[m] <= 0) delete cart[m]; }
+    if (a || m) render();
+  });
+
+  function checkout() {
+    if (total() === 0) return;
+    if (tg) tg.sendData(JSON.stringify(cart));
+    else alert("Откройте магазин из Telegram, чтобы оплатить.");
+  }
+  pay.addEventListener("click", checkout);
+  if (tg) tg.MainButton.onClick(checkout);
+
+  render();
+</script>
+</body>
+</html>
